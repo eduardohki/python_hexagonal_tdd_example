@@ -70,7 +70,7 @@ Dependencies always point inward:
 ## Installation
 
 ```bash
-uv sync"
+uv sync
 ```
 
 ## Running Tests
@@ -102,13 +102,12 @@ Tests mirror the source structure and use **pytest markers** for categorization:
 | `@pytest.mark.unit` | Fast, isolated, no external dependencies | Domain model tests |
 | `@pytest.mark.integration` | May require external systems | Repository adapter tests |
 
-You can apply markers to entire modules using `pytestmark`:
+Example:
 
 ```python
 import pytest
 
-pytestmark = pytest.mark.unit
-
+@pytest.mark.unit
 class TestMyEntity:
     def test_something(self):
         ...
