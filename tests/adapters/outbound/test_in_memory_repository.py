@@ -12,8 +12,6 @@ import pytest
 from example_app.adapters.outbound.in_memory_repository import InMemoryRepository
 from example_app.domain.models.example_entity import ExampleEntity
 
-pytestmark = pytest.mark.integration
-
 
 @pytest.fixture
 def repository() -> InMemoryRepository[ExampleEntity, UUID]:
@@ -30,6 +28,7 @@ def sample_entity() -> ExampleEntity:
     )
 
 
+@pytest.mark.integration
 class TestInMemoryRepository:
     """Integration tests for the InMemoryRepository adapter."""
 

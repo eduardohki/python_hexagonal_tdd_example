@@ -14,8 +14,6 @@ import pytest
 from example_app.domain.models.example_entity import ExampleEntity
 from example_app.domain.ports.repository import Repository
 
-pytestmark = pytest.mark.unit
-
 
 class FakeRepository(Repository[ExampleEntity, UUID]):
     """Fake repository for testing use cases in isolation."""
@@ -49,6 +47,7 @@ def fake_repository() -> FakeRepository:
     return FakeRepository()
 
 
+@pytest.mark.unit
 class TestExampleUseCase:
     """Unit tests for ExampleUseCase.
 

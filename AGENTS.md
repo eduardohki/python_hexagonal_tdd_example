@@ -2,9 +2,82 @@
 
 This document provides guidance for AI assistants working on this codebase.
 
+## Quick Reference
+
+Run after every change:
+
+```bash
+uv run ruff check src tests && uv run ruff format src tests && uv run mypy src && uv run pytest
+```
+
 ## Project Overview
 
 This is a Python project following **Hexagonal Architecture** (Ports and Adapters) with **Test-Driven Development** practices.
+
+## Tooling
+
+| Tool | Purpose | Command prefix |
+|------|---------|----------------|
+| **uv** | Package manager and runner | `uv run` |
+| **ruff** | Linting and formatting | `uv run ruff` |
+| **mypy** | Static type checking | `uv run mypy` |
+| **pytest** | Testing framework | `uv run pytest` |
+
+Always use `uv run` to execute commands — this ensures the correct virtual environment and dependencies are used.
+
+## Do
+
+- Use `uv run` for all commands
+- Add type hints to all functions
+- Write tests before implementation (TDD)
+- Use `@pytest.mark.unit` on test classes for use case tests
+- Use `@pytest.mark.integration` on test classes for adapter tests
+- Use fake implementations of ports for testing use cases
+- Use `given_when_then` naming pattern for test methods
+
+## Don't
+
+- Never import from `adapters/` inside `domain/`
+- Never use `pip` directly — use `uv`
+- Never skip running checks after changes
+- Never put framework dependencies in `domain/`
+
+## File Placement Rules
+
+| Type | Location |
+|------|----------|
+| Entities / Value Objects | `src/example_app/domain/models/` |
+| Port interfaces | `src/example_app/domain/ports/` |
+| Use cases | `src/example_app/domain/use_cases/` |
+| Inbound adapters | `src/example_app/adapters/inbound/` |
+| Outbound adapters | `src/example_app/adapters/outbound/` |
+| Tests | Mirror the source path under `tests/` |
+
+## Common Tasks
+
+### Adding a new use case
+
+1. Create test file: `tests/domain/use_cases/test_<name>.py`
+2. Write test class with `@pytest.mark.unit` decorator
+3. Write failing test with `given_when_then` naming
+4. Create use case: `src/example_app/domain/use_cases/<name>.py`
+5. Implement until tests pass
+6. Run checks: `uv run ruff check src tests && uv run ruff format src tests && uv run mypy src && uv run pytest`
+
+### Adding a new adapter
+
+1. Create test file: `tests/adapters/outbound/test_<name>.py` (or `inbound/`)
+2. Write test class with `@pytest.mark.integration` decorator
+3. Write failing test
+4. Create adapter: `src/example_app/adapters/outbound/<name>.py`
+5. Implement the port interface
+6. Run checks
+
+### Adding a new port
+
+1. Create interface: `src/example_app/domain/ports/<name>.py`
+2. Define abstract base class with `@abstractmethod` decorators
+3. Run checks
 
 ## Architecture Decisions
 
@@ -60,22 +133,24 @@ tests/
 Use the `given_when_then` pattern for test method names:
 
 ```python
-def test_given_valid_input_when_create_entity_then_entity_is_persisted(self):
-    # Given
-    use_case = CreateEntityUseCase(repository=fake_repository)
-    input_data = CreateEntityInput(name="Test")
+@pytest.mark.unit
+class TestCreateEntityUseCase:
+    def test_given_valid_input_when_create_entity_then_entity_is_persisted(self):
+        # Given
+        use_case = CreateEntityUseCase(repository=fake_repository)
+        input_data = CreateEntityInput(name="Test")
 
-    # When
-    result = use_case.execute(input_data)
+        # When
+        result = use_case.execute(input_data)
 
-    # Then
-    assert result.id is not None
-    assert fake_repository.exists(result.id)
+        # Then
+        assert result.id is not None
+        assert fake_repository.exists(result.id)
 ```
 
 ### Integration Tests
 
-- Use `pytestmark = pytest.mark.integration` at the top of test modules
+- Use `@pytest.mark.integration` decorator on test classes
 - Test adapters with real (or realistic) external dependencies
 - Located in `tests/adapters/`
 
