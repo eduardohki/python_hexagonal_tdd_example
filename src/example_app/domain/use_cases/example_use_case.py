@@ -4,7 +4,9 @@ Use cases contain application-specific business logic and orchestrate
 the flow of data between the domain and the adapters through ports.
 """
 
-from example_app.domain.ports.repository import ExampleRepository
+from typing import Any
+
+from example_app.domain.ports.repository import Repository
 
 
 class ExampleUseCase:
@@ -15,11 +17,11 @@ class ExampleUseCase:
     mock/fake implementations and swapping implementations at runtime.
     """
 
-    def __init__(self, repository: ExampleRepository) -> None:
+    def __init__(self, repository: Repository[Any, Any]) -> None:
         """Initialize the use case with required dependencies.
 
         Args:
-            repository: An implementation of the ExampleRepository port.
+            repository: An implementation of the Repository port.
         """
         self._repository = repository
 

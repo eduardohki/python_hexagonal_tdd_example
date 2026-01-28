@@ -40,35 +40,17 @@ hx_tdd_example/
 ## Hexagonal Architecture Overview
 
 ```
-                    ┌─────────────────────────────────────────┐
-                    │           Inbound Adapters              │
-                    │     (REST API, CLI, Message Queue)      │
-                    └─────────────────┬───────────────────────┘
-                                      │
-                                      ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           Domain (The Hexagon)                              │
-│                                                                              │
-│  ┌───────────────────────────────────────────────────────────────────────┐  │
-│  │                              Use Cases                                 │  │
-│  │              (Application-specific business rules)                     │  │
-│  └───────────────────────────────────────────────────────────────────────┘  │
-│                                                                              │
-│  ┌───────────────────────────────────────────────────────────────────────┐  │
-│  │                         Models & Ports                                 │  │
-│  │         (Entities, Value Objects, Interface definitions)              │  │
-│  │                                                                        │  │
-│  │   • Pure business logic                                                │  │
-│  │   • No dependencies on external systems                                │  │
-│  │   • Defines interfaces (ports) for external communication             │  │
-│  └───────────────────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────┬───────────────────────────────────────┘
-                                      │
-                                      ▼
-                    ┌─────────────────────────────────────────┐
-                    │           Outbound Adapters             │
-                    │    (Database, External APIs, Cache)     │
-                    └─────────────────────────────────────────┘
+┌───────────────────┐      ┌─────────────────────────────────────────────────────────┐      ┌───────────────────┐
+│                   │      │                    Domain (The Hexagon)                 │      │                   │
+│  Inbound Adapters │      │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐  │      │ Outbound Adapters │
+│                   │      │  │             │  │             │  │                 │  │      │                   │
+│  • REST API       │─────▶│  │  Use Cases  │──│   Models    │──│      Ports      │──│─────▶│  • Repositories   │
+│  • CLI            │      │  │             │  │             │  │   (interfaces)  │  │      │  • External APIs  │
+│  • Message Queue  │      │  └─────────────┘  └─────────────┘  └─────────────────┘  │      │  • Database       │
+│                   │      │                                                         │      │                   │
+└───────────────────┘      └─────────────────────────────────────────────────────────┘      └───────────────────┘
+     (adapters/                              (domain/)                                           (adapters/
+      inbound/)                     models/ | use_cases/ | ports/                                 outbound/)
 ```
 
 ### Key Concepts

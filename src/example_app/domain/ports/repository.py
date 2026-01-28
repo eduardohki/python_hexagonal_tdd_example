@@ -9,15 +9,11 @@ persistence logic (e.g., PostgreSQL, MongoDB, in-memory).
 """
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Generic, TypeVar
-from uuid import UUID
+from typing import Generic, TypeVar
 
 # Generic type for entities
 T = TypeVar("T")
 ID = TypeVar("ID")
-
-if TYPE_CHECKING:
-    pass
 
 
 class Repository(ABC, Generic[T, ID]):
@@ -87,7 +83,3 @@ class Repository(ABC, Generic[T, ID]):
             True if the entity exists, False otherwise
         """
         raise NotImplementedError
-
-
-# Type alias for the example entity repository
-ExampleRepository = Repository["ExampleEntity", UUID]
