@@ -40,17 +40,17 @@ python_hexagonal_tdd_example/
 ## Hexagonal Architecture Overview
 
 ```
-┌───────────────────┐      ┌─────────────────────────────────────────────────────────┐      ┌───────────────────┐
-│                   │      │                    Domain (The Hexagon)                 │      │                   │
-│  Inbound Adapters │      │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐  │      │ Outbound Adapters │
-│                   │      │  │             │  │             │  │                 │  │      │                   │
-│  • REST API       │─────▶│  │  Use Cases  │──│   Models    │──│      Ports      │──│─────▶│  • Repositories   │
-│  • CLI            │      │  │             │  │             │  │   (interfaces)  │  │      │  • External APIs  │
-│  • Message Queue  │      │  └─────────────┘  └─────────────┘  └─────────────────┘  │      │  • Database       │
-│                   │      │                                                         │      │                   │
-└───────────────────┘      └─────────────────────────────────────────────────────────┘      └───────────────────┘
-     (adapters/                              (domain/)                                           (adapters/
-      inbound/)                     models/ | use_cases/ | ports/                                 outbound/)
+┌─────────────────┐   ┌──────────────────────────────────┐   ┌─────────────────┐
+│                 │   │       Domain (The Hexagon)       │   │                 │
+│ Inbound Adapters│   │ ┌────────┐ ┌──────┐ ┌─────────┐  │   │Outbound Adapters│
+│                 │   │ │        │ │      │ │  Ports  │  │   │                 │
+│ • REST API      │──▶│ │  Use   │─│Models│─│ (inter- │──│──▶│ • Repositories  │
+│ • CLI           │   │ │ Cases  │ │      │ │ faces)  │  │   │ • External APIs │
+│ • Message Queue │   │ └────────┘ └──────┘ └─────────┘  │   │ • Database      │
+│                 │   │                                  │   │                 │
+└─────────────────┘   └──────────────────────────────────┘   └─────────────────┘
+   (adapters/                      (domain/)                     (adapters/
+    inbound/)            models/ | use_cases/ | ports/             outbound/)
 ```
 
 ### Key Concepts
@@ -70,7 +70,7 @@ Dependencies always point inward:
 ## Installation
 
 ```bash
-uv pip install -e ".[dev]"
+uv sync"
 ```
 
 ## Running Tests
