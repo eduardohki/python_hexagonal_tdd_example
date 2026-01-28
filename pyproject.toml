@@ -6,6 +6,9 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = []
 
+[project.scripts]
+clean = "scripts.clean:main"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0.0",
