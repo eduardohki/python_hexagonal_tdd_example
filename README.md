@@ -39,7 +39,7 @@ python_hexagonal_tdd_example/
 
 ## Hexagonal Architecture Overview
 
-```
+```text
 ┌─────────────────┐   ┌──────────────────────────────────┐   ┌─────────────────┐
 │                 │   │       Domain (The Hexagon)       │   │                 │
 │ Inbound Adapters│   │ ┌────────┐ ┌──────┐ ┌─────────┐  │   │Outbound Adapters│
