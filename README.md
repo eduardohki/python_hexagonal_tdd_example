@@ -1,11 +1,11 @@
-# Hexagonal TDD Example
+# Python Hexagonal & TDD Example
 
-A Python project demonstrating hexagonal architecture (ports and adapters) with Test-Driven Development.
+A reference Python project for hexagonal architecture (ports and adapters) with Test-Driven Development.
 
 ## Project Structure
 
 ```
-hx_tdd_example/
+python_hexagonal_tdd_example/
 ├── src/
 │   └── example_app/
 │       ├── domain/                 # The hexagon (core business logic)

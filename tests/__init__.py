@@ -1,1 +1,1 @@
-"""Test suite for hx_tdd_example."""
+"""Test suite for python_hexagonal_tdd_example."""
