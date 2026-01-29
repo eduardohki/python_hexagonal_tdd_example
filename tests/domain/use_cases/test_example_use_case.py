@@ -2,7 +2,10 @@
 Unit tests for ExampleUseCase.
 
 These tests verify the behavior of the use case in isolation,
-using test doubles (fakes/mocks) for external dependencies (ports).
+using test doubles (fakes) for external dependencies (ports).
+
+Fakes satisfy the ExampleEntityRepository protocol through structural typing —
+no inheritance required.
 
 Uses BDD-style naming: given_<context>_when_<action>_then_<expected_outcome>
 """
@@ -12,11 +15,15 @@ from uuid import UUID
 import pytest
 
 from example_app.domain.models.example_entity import ExampleEntity
-from example_app.domain.ports.repository import Repository
+from example_app.domain.ports.repository import ExampleEntityRepository
 
 
-class FakeRepository(Repository[ExampleEntity, UUID]):
-    """Fake repository for testing use cases in isolation."""
+class FakeExampleEntityRepository:
+    """Fake repository for testing use cases in isolation.
+
+    No inheritance needed — this class satisfies the ExampleEntityRepository
+    protocol through structural typing (duck typing with type safety).
+    """
 
     def __init__(self) -> None:
         self._storage: dict[UUID, ExampleEntity] = {}
@@ -42,9 +49,13 @@ class FakeRepository(Repository[ExampleEntity, UUID]):
 
 
 @pytest.fixture
-def fake_repository() -> FakeRepository:
-    """Provide a fake repository for testing."""
-    return FakeRepository()
+def fake_repository() -> ExampleEntityRepository:
+    """Provide a fake repository for testing.
+
+    Return type is the Protocol, not the fake class.
+    This ensures the fake satisfies the protocol contract.
+    """
+    return FakeExampleEntityRepository()
 
 
 @pytest.mark.unit
@@ -54,7 +65,7 @@ class TestExampleUseCase:
     Example of what real use case tests might look like:
 
     def test_given_valid_input_when_create_entity_then_entity_is_persisted(
-        self, fake_repository: FakeRepository
+        self, fake_repository: ExampleEntityRepository
     ) -> None:
         # Given
         use_case = CreateEntityUseCase(repository=fake_repository)
@@ -68,7 +79,7 @@ class TestExampleUseCase:
         assert fake_repository.exists(result.id)
 
     def test_given_empty_name_when_create_entity_then_raises_validation_error(
-        self, fake_repository: FakeRepository
+        self, fake_repository: ExampleEntityRepository
     ) -> None:
         # Given
         use_case = CreateEntityUseCase(repository=fake_repository)
@@ -80,7 +91,7 @@ class TestExampleUseCase:
     """
 
     def test_given_fake_repository_when_initialized_then_repository_is_available(
-        self, fake_repository: FakeRepository
+        self, fake_repository: ExampleEntityRepository
     ) -> None:
         # Given / When
         repository = fake_repository

@@ -1,22 +1,27 @@
 """
-Integration tests for InMemoryRepository.
+Integration tests for InMemoryExampleEntityRepository.
 
-These tests verify that the in-memory repository correctly implements
-the Repository interface and behaves as expected.
+These tests verify that the in-memory repository correctly satisfies
+the ExampleEntityRepository protocol and behaves as expected.
 """
-
-from uuid import UUID
 
 import pytest
 
-from example_app.adapters.outbound.in_memory_repository import InMemoryRepository
+from example_app.adapters.outbound.in_memory_repository import (
+    InMemoryExampleEntityRepository,
+)
 from example_app.domain.models.example_entity import ExampleEntity
+from example_app.domain.ports.repository import ExampleEntityRepository
 
 
 @pytest.fixture
-def repository() -> InMemoryRepository[ExampleEntity, UUID]:
-    """Provide a fresh in-memory repository for each test."""
-    return InMemoryRepository()
+def repository() -> ExampleEntityRepository:
+    """Provide a fresh in-memory repository for each test.
+
+    Return type is the Protocol, not the concrete class.
+    This ensures the adapter satisfies the protocol contract.
+    """
+    return InMemoryExampleEntityRepository()
 
 
 @pytest.fixture
@@ -29,12 +34,12 @@ def sample_entity() -> ExampleEntity:
 
 
 @pytest.mark.integration
-class TestInMemoryRepository:
-    """Integration tests for the InMemoryRepository adapter."""
+class TestInMemoryExampleEntityRepository:
+    """Integration tests for the InMemoryExampleEntityRepository adapter."""
 
     def test_save_and_find_by_id(
         self,
-        repository: InMemoryRepository[ExampleEntity, UUID],
+        repository: ExampleEntityRepository,
         sample_entity: ExampleEntity,
     ) -> None:
         """Should save an entity and retrieve it by ID."""
@@ -49,7 +54,7 @@ class TestInMemoryRepository:
 
     def test_find_by_id_not_found(
         self,
-        repository: InMemoryRepository[ExampleEntity, UUID],
+        repository: ExampleEntityRepository,
     ) -> None:
         """Should return None when entity is not found."""
         from uuid import uuid4
@@ -60,7 +65,7 @@ class TestInMemoryRepository:
 
     def test_find_all_empty(
         self,
-        repository: InMemoryRepository[ExampleEntity, UUID],
+        repository: ExampleEntityRepository,
     ) -> None:
         """Should return empty list when no entities exist."""
         result = repository.find_all()
@@ -69,7 +74,7 @@ class TestInMemoryRepository:
 
     def test_find_all_with_entities(
         self,
-        repository: InMemoryRepository[ExampleEntity, UUID],
+        repository: ExampleEntityRepository,
     ) -> None:
         """Should return all saved entities."""
         entity1 = ExampleEntity.create(name="Entity 1")
@@ -85,7 +90,7 @@ class TestInMemoryRepository:
 
     def test_delete_existing_entity(
         self,
-        repository: InMemoryRepository[ExampleEntity, UUID],
+        repository: ExampleEntityRepository,
         sample_entity: ExampleEntity,
     ) -> None:
         """Should delete an existing entity and return True."""
@@ -98,7 +103,7 @@ class TestInMemoryRepository:
 
     def test_delete_non_existing_entity(
         self,
-        repository: InMemoryRepository[ExampleEntity, UUID],
+        repository: ExampleEntityRepository,
     ) -> None:
         """Should return False when trying to delete non-existing entity."""
         from uuid import uuid4
@@ -109,7 +114,7 @@ class TestInMemoryRepository:
 
     def test_exists_true(
         self,
-        repository: InMemoryRepository[ExampleEntity, UUID],
+        repository: ExampleEntityRepository,
         sample_entity: ExampleEntity,
     ) -> None:
         """Should return True for existing entity."""
@@ -121,7 +126,7 @@ class TestInMemoryRepository:
 
     def test_exists_false(
         self,
-        repository: InMemoryRepository[ExampleEntity, UUID],
+        repository: ExampleEntityRepository,
     ) -> None:
         """Should return False for non-existing entity."""
         from uuid import uuid4
@@ -132,14 +137,20 @@ class TestInMemoryRepository:
 
     def test_clear(
         self,
-        repository: InMemoryRepository[ExampleEntity, UUID],
+        repository: ExampleEntityRepository,
     ) -> None:
-        """Should remove all entities from storage."""
+        """Should remove all entities from storage.
+
+        Note: clear() is an adapter-specific method not part of the protocol.
+        We check the instance type to access it.
+        """
         entity1 = ExampleEntity.create(name="Entity 1")
         entity2 = ExampleEntity.create(name="Entity 2")
         repository.save(entity1)
         repository.save(entity2)
 
+        # clear() is adapter-specific, not part of the protocol
+        assert isinstance(repository, InMemoryExampleEntityRepository)
         repository.clear()
 
         assert repository.find_all() == []
@@ -148,7 +159,7 @@ class TestInMemoryRepository:
 
     def test_save_updates_existing_entity(
         self,
-        repository: InMemoryRepository[ExampleEntity, UUID],
+        repository: ExampleEntityRepository,
         sample_entity: ExampleEntity,
     ) -> None:
         """Should update an existing entity when saved with same ID."""

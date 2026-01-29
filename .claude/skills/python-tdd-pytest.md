@@ -87,40 +87,41 @@ Prefer fake implementations over mocks for testing. Fakes are simpler, more read
 
 ### Fake Repository Example
 
+Fakes should implement the **specific port** defined by the use case, not a generic repository:
+
 ```python
 from uuid import UUID
 
-from <app_name>.domain.models.entity import Entity
+from my_app.domain.models.user import User
 
 
-class FakeRepository:
+class FakeUserRepository:
     """Fake repository for testing use cases in isolation.
     
-    No inheritance needed — this class satisfies the Repository[Entity, UUID]
+    No inheritance needed — this class satisfies the UserRepository
     protocol through structural typing (duck typing with type safety).
+    
+    Implements only the methods the port defines (driven by use case needs).
     """
 
     def __init__(self) -> None:
-        self._storage: dict[UUID, Entity] = {}
+        self._storage: dict[UUID, User] = {}
 
-    def save(self, entity: Entity) -> Entity:
-        self._storage[entity.id] = entity
-        return entity
+    def save(self, user: User) -> User:
+        self._storage[user.id] = user
+        return user
 
-    def find_by_id(self, entity_id: UUID) -> Entity | None:
-        return self._storage.get(entity_id)
+    def find_by_id(self, user_id: UUID) -> User | None:
+        return self._storage.get(user_id)
 
-    def find_all(self) -> list[Entity]:
-        return list(self._storage.values())
+    def find_by_email(self, email: str) -> User | None:
+        for user in self._storage.values():
+            if user.email == email:
+                return user
+        return None
 
-    def delete(self, entity_id: UUID) -> bool:
-        if entity_id in self._storage:
-            del self._storage[entity_id]
-            return True
-        return False
-
-    def exists(self, entity_id: UUID) -> bool:
-        return entity_id in self._storage
+    def exists_with_email(self, email: str) -> bool:
+        return self.find_by_email(email) is not None
 ```
 
 ## Fixtures
@@ -130,18 +131,18 @@ Define shared fixtures in `conftest.py`:
 ```python
 import pytest
 
-from <app_name>.domain.ports.repository import Repository
-from tests.fakes import FakeRepository
+from my_app.domain.ports.user_repository import UserRepository
+from tests.fakes import FakeUserRepository
 
 
 @pytest.fixture
-def fake_repository() -> Repository:
+def fake_user_repository() -> UserRepository:
     """Provide a fake repository for testing.
     
-    Return type is the Protocol, but the actual instance is a fake.
+    Return type is the Protocol (UserRepository), not the fake class.
     This ensures the fake satisfies the protocol contract.
     """
-    return FakeRepository()
+    return FakeUserRepository()
 
 
 @pytest.fixture
@@ -160,102 +161,102 @@ def app_config() -> dict:
 ```python
 import pytest
 
-from <app_name>.domain.use_cases.create_entity import CreateEntityUseCase, CreateEntityInput
-from tests.fakes import FakeRepository
+from my_app.domain.use_cases.create_user import CreateUserUseCase, CreateUserInput
+from my_app.domain.ports.user_repository import UserRepository
+from tests.fakes import FakeUserRepository
 
 
 @pytest.fixture
-def fake_repository() -> FakeRepository:
-    return FakeRepository()
+def fake_user_repository() -> UserRepository:
+    return FakeUserRepository()
 
 
 @pytest.mark.unit
-class TestCreateEntityUseCase:
-    def test_given_valid_input_when_execute_then_returns_created_entity(
-        self, fake_repository: FakeRepository
+class TestCreateUserUseCase:
+    def test_given_valid_input_when_execute_then_returns_created_user(
+        self, fake_user_repository: UserRepository
     ) -> None:
         # Given
-        use_case = CreateEntityUseCase(repository=fake_repository)
-        input_data = CreateEntityInput(name="Test Entity")
+        use_case = CreateUserUseCase(repository=fake_user_repository)
+        input_data = CreateUserInput(name="John", email="john@example.com")
 
         # When
         result = use_case.execute(input_data)
 
         # Then
         assert result.id is not None
-        assert result.name == "Test Entity"
+        assert result.name == "John"
+        assert result.email == "john@example.com"
 
-    def test_given_valid_input_when_execute_then_entity_is_persisted(
-        self, fake_repository: FakeRepository
+    def test_given_existing_email_when_execute_then_raises_error(
+        self, fake_user_repository: UserRepository
     ) -> None:
         # Given
-        use_case = CreateEntityUseCase(repository=fake_repository)
-        input_data = CreateEntityInput(name="Test Entity")
+        use_case = CreateUserUseCase(repository=fake_user_repository)
+        input_data = CreateUserInput(name="John", email="john@example.com")
+        use_case.execute(input_data)  # Create first user
 
-        # When
-        result = use_case.execute(input_data)
-
-        # Then
-        assert fake_repository.exists(result.id)
+        # When / Then
+        with pytest.raises(ValueError, match="already exists"):
+            use_case.execute(CreateUserInput(name="Jane", email="john@example.com"))
 ```
 
 ### Integration Test for Adapter
 
 ```python
-from uuid import UUID
-
 import pytest
 
-from <app_name>.adapters.outbound.in_memory_repository import InMemoryRepository
-from <app_name>.domain.models.entity import Entity
+from my_app.adapters.outbound.in_memory_user_repository import InMemoryUserRepository
+from my_app.domain.models.user import User
+from my_app.domain.ports.user_repository import UserRepository
 
 
 @pytest.fixture
-def repository() -> InMemoryRepository[Entity, UUID]:
-    return InMemoryRepository()
+def repository() -> UserRepository:
+    return InMemoryUserRepository()
 
 
 @pytest.fixture
-def sample_entity() -> Entity:
-    return Entity.create(name="Test Entity", description="A test entity")
+def sample_user() -> User:
+    return User.create(name="John", email="john@example.com")
 
 
 @pytest.mark.integration
-class TestInMemoryRepository:
+class TestInMemoryUserRepository:
     def test_save_and_find_by_id(
         self,
-        repository: InMemoryRepository[Entity, UUID],
-        sample_entity: Entity,
+        repository: UserRepository,
+        sample_user: User,
     ) -> None:
-        saved = repository.save(sample_entity)
+        saved = repository.save(sample_user)
 
-        found = repository.find_by_id(sample_entity.id)
+        found = repository.find_by_id(sample_user.id)
 
         assert found is not None
-        assert found.id == sample_entity.id
+        assert found.id == sample_user.id
         assert saved == found
 
-    def test_find_by_id_returns_none_when_not_found(
+    def test_find_by_email_returns_user(
         self,
-        repository: InMemoryRepository[Entity, UUID],
+        repository: UserRepository,
+        sample_user: User,
     ) -> None:
-        from uuid import uuid4
+        repository.save(sample_user)
 
-        result = repository.find_by_id(uuid4())
+        found = repository.find_by_email("john@example.com")
 
-        assert result is None
+        assert found is not None
+        assert found.email == "john@example.com"
 
-    def test_delete_existing_entity_returns_true(
+    def test_exists_with_email_returns_true_for_existing(
         self,
-        repository: InMemoryRepository[Entity, UUID],
-        sample_entity: Entity,
+        repository: UserRepository,
+        sample_user: User,
     ) -> None:
-        repository.save(sample_entity)
+        repository.save(sample_user)
 
-        deleted = repository.delete(sample_entity.id)
-
-        assert deleted is True
-        assert repository.find_by_id(sample_entity.id) is None
+        assert repository.exists_with_email("john@example.com") is True
+        assert repository.exists_with_email("other@example.com") is False
 ```
 
 ## Running Tests
@@ -330,6 +331,7 @@ exclude_lines = [
 - Use fixtures for setup and dependency injection
 - Let fakes satisfy protocols implicitly (no inheritance from ports)
 - Type fixture return values as the Protocol, not the fake class
+- Create specific fakes for each port (e.g., `FakeUserRepository`, not generic `FakeRepository`)
 
 ## Don't
 
@@ -339,3 +341,4 @@ exclude_lines = [
 - Don't write tests that depend on each other
 - Don't ignore test failures
 - Don't make fakes inherit from port interfaces (use structural typing)
+- Don't create generic fakes — match the specific port's methods

@@ -1,46 +1,46 @@
 """
-Repository port - Interface for data persistence operations.
+Repository port for ExampleEntity persistence.
 
 This is an output (driven) port that defines how the domain layer
-expects to interact with data storage systems.
+expects to interact with data storage for ExampleEntity.
 
-Implementations of this interface (adapters) handle the actual
-persistence logic (e.g., PostgreSQL, MongoDB, in-memory).
+Ports in hexagonal architecture are defined by use case needs,
+not by generic CRUD patterns. Each entity type has its own
+repository port with domain-specific methods.
+
+Adapters satisfy this protocol through structural typing —
+no inheritance required.
 """
 
-from abc import ABC, abstractmethod
-from typing import Generic, TypeVar
+from typing import Protocol
+from uuid import UUID
 
-# Generic type for entities
-T = TypeVar("T")
-ID = TypeVar("ID")
+from example_app.domain.models.example_entity import ExampleEntity
 
 
-class Repository(ABC, Generic[T, ID]):
-    """Abstract base repository defining standard CRUD operations.
+class ExampleEntityRepository(Protocol):
+    """Repository protocol for ExampleEntity persistence.
 
-    This interface should be implemented by outbound adapters that
-    handle actual data persistence.
+    This port is defined by what the use cases need, not by
+    generic data access patterns. Add methods here as use cases
+    require them.
 
-    Type Parameters:
-        T: The entity type this repository manages
-        ID: The type of the entity's identifier
+    Adapters satisfy this protocol by implementing these methods.
+    No inheritance required — just implement the methods with matching signatures.
     """
 
-    @abstractmethod
-    def save(self, entity: T) -> T:
+    def save(self, entity: ExampleEntity) -> ExampleEntity:
         """Persist an entity.
 
         Args:
             entity: The entity to save
 
         Returns:
-            The saved entity (may include generated fields like ID)
+            The saved entity
         """
-        raise NotImplementedError
+        ...
 
-    @abstractmethod
-    def find_by_id(self, entity_id: ID) -> T | None:
+    def find_by_id(self, entity_id: UUID) -> ExampleEntity | None:
         """Find an entity by its identifier.
 
         Args:
@@ -49,19 +49,17 @@ class Repository(ABC, Generic[T, ID]):
         Returns:
             The entity if found, None otherwise
         """
-        raise NotImplementedError
+        ...
 
-    @abstractmethod
-    def find_all(self) -> list[T]:
+    def find_all(self) -> list[ExampleEntity]:
         """Retrieve all entities.
 
         Returns:
             A list of all entities
         """
-        raise NotImplementedError
+        ...
 
-    @abstractmethod
-    def delete(self, entity_id: ID) -> bool:
+    def delete(self, entity_id: UUID) -> bool:
         """Delete an entity by its identifier.
 
         Args:
@@ -70,10 +68,9 @@ class Repository(ABC, Generic[T, ID]):
         Returns:
             True if the entity was deleted, False if not found
         """
-        raise NotImplementedError
+        ...
 
-    @abstractmethod
-    def exists(self, entity_id: ID) -> bool:
+    def exists(self, entity_id: UUID) -> bool:
         """Check if an entity exists.
 
         Args:
@@ -82,4 +79,4 @@ class Repository(ABC, Generic[T, ID]):
         Returns:
             True if the entity exists, False otherwise
         """
-        raise NotImplementedError
+        ...

@@ -11,6 +11,36 @@ Python offers two main approaches for defining interfaces:
 
 **Prefer Protocols** because they support composition over inheritance and don't require classes to explicitly inherit from the interface.
 
+## Specific Ports, Not Generic Interfaces
+
+In hexagonal architecture, ports should be **defined by use case needs**, not as generic CRUD interfaces.
+
+**Avoid** generic repositories with type parameters:
+
+```python
+# Too generic — not driven by use case needs
+class Repository(Protocol[T, ID]):
+    def save(self, entity: T) -> T: ...
+    def find_by_id(self, entity_id: ID) -> T | None: ...
+```
+
+**Prefer** specific ports with domain-meaningful methods:
+
+```python
+# Specific to User, with methods the use cases actually need
+class UserRepository(Protocol):
+    def save(self, user: User) -> User: ...
+    def find_by_id(self, user_id: UUID) -> User | None: ...
+    def find_by_email(self, email: str) -> User | None: ...
+    def exists_with_email(self, email: str) -> bool: ...
+```
+
+Benefits:
+- No complex generics or type variance issues
+- Methods use domain language (`find_by_email` vs `find_by_field`)
+- Each port only has methods that use cases need
+- Simpler to implement and test
+
 ## Protocols vs ABCs
 
 ### Protocols (Structural Typing)
@@ -188,20 +218,30 @@ class HasTimestamp(Protocol):
     def updated_at(self) -> datetime: ...
 ```
 
-### Generic Protocols
+### Generic Protocols (Use Sparingly)
+
+Generic protocols add complexity. Prefer specific protocols for domain ports.
 
 ```python
 from typing import Protocol, TypeVar
 
 T = TypeVar("T")
-ID = TypeVar("ID")
 
 
-class Repository(Protocol[T, ID]):
-    def save(self, entity: T) -> T: ...
-    def find_by_id(self, entity_id: ID) -> T | None: ...
-    def find_all(self) -> list[T]: ...
-    def delete(self, entity_id: ID) -> bool: ...
+class Serializer(Protocol[T]):
+    """Generic protocol — appropriate for cross-cutting utilities, not domain ports."""
+    def serialize(self, obj: T) -> bytes: ...
+    def deserialize(self, data: bytes) -> T: ...
+```
+
+**For domain ports, prefer specific protocols without generics:**
+
+```python
+class OrderRepository(Protocol):
+    """Specific protocol — defined by use case needs."""
+    def save(self, order: Order) -> Order: ...
+    def find_by_id(self, order_id: UUID) -> Order | None: ...
+    def find_pending_for_customer(self, customer_id: UUID) -> list[Order]: ...
 ```
 
 ### Callable Protocol
@@ -269,22 +309,39 @@ def safe_close(obj: object) -> None:
 
 ### Defining Ports as Protocols
 
+Ports are defined by **what the use case needs**, not generic patterns:
+
 ```python
-# domain/ports/repository.py
-from typing import Protocol, TypeVar
+# domain/ports/user_repository.py
+from typing import Protocol
 from uuid import UUID
 
-T = TypeVar("T")
+from my_app.domain.models.user import User
 
 
-class Repository(Protocol[T]):
-    """Output port for data persistence."""
+class UserRepository(Protocol):
+    """Output port for User persistence — defined by use case needs."""
 
-    def save(self, entity: T) -> T: ...
-    def find_by_id(self, entity_id: UUID) -> T | None: ...
-    def find_all(self) -> list[T]: ...
-    def delete(self, entity_id: UUID) -> bool: ...
-    def exists(self, entity_id: UUID) -> bool: ...
+    def save(self, user: User) -> User: ...
+    def find_by_id(self, user_id: UUID) -> User | None: ...
+    def find_by_email(self, email: str) -> User | None: ...
+    def exists_with_email(self, email: str) -> bool: ...
+```
+
+```python
+# domain/ports/order_repository.py
+from typing import Protocol
+from uuid import UUID
+
+from my_app.domain.models.order import Order
+
+
+class OrderRepository(Protocol):
+    """Output port for Order persistence — defined by use case needs."""
+
+    def save(self, order: Order) -> Order: ...
+    def find_by_id(self, order_id: UUID) -> Order | None: ...
+    def find_pending_for_customer(self, customer_id: UUID) -> list[Order]: ...
 ```
 
 ```python
@@ -304,37 +361,34 @@ class EventPublisher(Protocol):
 ### Implementing Ports (Adapters)
 
 ```python
-# adapters/outbound/in_memory_repository.py
+# adapters/outbound/in_memory_user_repository.py
 from uuid import UUID
 
 from my_app.domain.models.user import User
 
 
-# No inheritance from Repository Protocol needed!
+# No inheritance from UserRepository Protocol needed!
 class InMemoryUserRepository:
-    """Adapter implementing Repository protocol."""
+    """Adapter satisfying UserRepository protocol."""
 
     def __init__(self) -> None:
         self._storage: dict[UUID, User] = {}
 
-    def save(self, entity: User) -> User:
-        self._storage[entity.id] = entity
-        return entity
+    def save(self, user: User) -> User:
+        self._storage[user.id] = user
+        return user
 
-    def find_by_id(self, entity_id: UUID) -> User | None:
-        return self._storage.get(entity_id)
+    def find_by_id(self, user_id: UUID) -> User | None:
+        return self._storage.get(user_id)
 
-    def find_all(self) -> list[User]:
-        return list(self._storage.values())
+    def find_by_email(self, email: str) -> User | None:
+        for user in self._storage.values():
+            if user.email == email:
+                return user
+        return None
 
-    def delete(self, entity_id: UUID) -> bool:
-        if entity_id in self._storage:
-            del self._storage[entity_id]
-            return True
-        return False
-
-    def exists(self, entity_id: UUID) -> bool:
-        return entity_id in self._storage
+    def exists_with_email(self, email: str) -> bool:
+        return self.find_by_email(email) is not None
 ```
 
 ### Use Cases with Protocol Dependencies
@@ -345,7 +399,7 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from my_app.domain.models.user import User
-from my_app.domain.ports.repository import Repository
+from my_app.domain.ports.user_repository import UserRepository
 from my_app.domain.ports.event_publisher import EventPublisher
 
 
@@ -359,22 +413,28 @@ class CreateUserInput:
 class CreateUserOutput:
     id: UUID
     name: str
+    email: str
 
 
 class CreateUserUseCase:
     def __init__(
         self,
-        repository: Repository[User],
+        repository: UserRepository,
         event_publisher: EventPublisher,
     ) -> None:
         self._repository = repository
         self._event_publisher = event_publisher
 
     def execute(self, input_data: CreateUserInput) -> CreateUserOutput:
+        # Use domain-specific method from the port
+        if self._repository.exists_with_email(input_data.email):
+            raise ValueError(f"User with email {input_data.email} already exists")
+        
         user = User.create(name=input_data.name, email=input_data.email)
         saved_user = self._repository.save(user)
         self._event_publisher.publish(UserCreatedEvent(user_id=saved_user.id))
-        return CreateUserOutput(id=saved_user.id, name=saved_user.name)
+        
+        return CreateUserOutput(id=saved_user.id, name=saved_user.name, email=saved_user.email)
 ```
 
 ## Testing with Protocols
@@ -389,26 +449,26 @@ from my_app.domain.models.user import User
 
 
 class FakeUserRepository:
-    """Fake for testing — satisfies Repository[User] protocol."""
+    """Fake for testing — satisfies UserRepository protocol."""
 
     def __init__(self) -> None:
         self._storage: dict[UUID, User] = {}
 
-    def save(self, entity: User) -> User:
-        self._storage[entity.id] = entity
-        return entity
+    def save(self, user: User) -> User:
+        self._storage[user.id] = user
+        return user
 
-    def find_by_id(self, entity_id: UUID) -> User | None:
-        return self._storage.get(entity_id)
+    def find_by_id(self, user_id: UUID) -> User | None:
+        return self._storage.get(user_id)
 
-    def find_all(self) -> list[User]:
-        return list(self._storage.values())
+    def find_by_email(self, email: str) -> User | None:
+        for user in self._storage.values():
+            if user.email == email:
+                return user
+        return None
 
-    def delete(self, entity_id: UUID) -> bool:
-        return self._storage.pop(entity_id, None) is not None
-
-    def exists(self, entity_id: UUID) -> bool:
-        return entity_id in self._storage
+    def exists_with_email(self, email: str) -> bool:
+        return self.find_by_email(email) is not None
 
 
 class FakeEventPublisher:
@@ -499,7 +559,8 @@ class LoggingRepository:
 - Prefer Protocols over ABCs for defining interfaces
 - Use composition to combine behaviors
 - Keep protocols small and focused (Interface Segregation)
-- Use generic protocols for reusable interfaces
+- Define ports by use case needs, not generic patterns
+- Use domain language in port method names (`find_by_email`, not `find_by_field`)
 - Let classes satisfy protocols implicitly (no inheritance)
 - Use `@runtime_checkable` sparingly and only when needed
 
@@ -511,3 +572,5 @@ class LoggingRepository:
 - Don't use `isinstance()` checks with non-runtime-checkable protocols
 - Don't force classes to inherit from protocols unnecessarily
 - Don't mix protocol definitions with concrete implementations
+- Don't create generic `Repository[T, ID]` protocols — be specific to each entity
+- Don't add port methods "just in case" — add them when use cases need them

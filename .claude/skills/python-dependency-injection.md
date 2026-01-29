@@ -41,9 +41,12 @@ Classes should depend on interfaces (Protocols), not concrete implementations:
 from typing import Protocol
 
 
-class Repository(Protocol[T]):
-    def save(self, entity: T) -> T: ...
-    def find_by_id(self, entity_id: UUID) -> T | None: ...
+class UserRepository(Protocol):
+    """Specific port — defined by use case needs, not generic CRUD."""
+    def save(self, user: User) -> User: ...
+    def find_by_id(self, user_id: UUID) -> User | None: ...
+    def find_by_email(self, email: str) -> User | None: ...
+    def exists_with_email(self, email: str) -> bool: ...
 
 
 class Emailer(Protocol):
@@ -53,8 +56,8 @@ class Emailer(Protocol):
 class CreateUserUseCase:
     def __init__(
         self,
-        repository: Repository[User],  # Depends on Protocol, not implementation
-        emailer: Emailer,               # Depends on Protocol, not implementation
+        repository: UserRepository,  # Depends on specific Protocol, not generic
+        emailer: Emailer,             # Depends on Protocol, not implementation
     ) -> None:
         self._repository = repository
         self._emailer = emailer
@@ -199,25 +202,25 @@ def create_application(config: Config) -> Application:
 
 ## Hexagonal Architecture Integration
 
-### Ports as Protocols
+### Ports as Specific Protocols
 
-Define ports (interfaces) in the domain layer:
+Define ports in the domain layer based on **what the use case needs**, not generic CRUD:
 
 ```python
-# domain/ports/repository.py
-from typing import Protocol, TypeVar
+# domain/ports/user_repository.py
+from typing import Protocol
 from uuid import UUID
 
-T = TypeVar("T")
+from my_app.domain.models.user import User
 
 
-class Repository(Protocol[T]):
-    """Output port for persistence."""
+class UserRepository(Protocol):
+    """Output port for User persistence — defined by use case needs."""
     
-    def save(self, entity: T) -> T: ...
-    def find_by_id(self, entity_id: UUID) -> T | None: ...
-    def find_all(self) -> list[T]: ...
-    def delete(self, entity_id: UUID) -> bool: ...
+    def save(self, user: User) -> User: ...
+    def find_by_id(self, user_id: UUID) -> User | None: ...
+    def find_by_email(self, email: str) -> User | None: ...
+    def exists_with_email(self, email: str) -> bool: ...
 ```
 
 ```python
@@ -239,81 +242,80 @@ class NotificationService(Protocol):
 from dataclasses import dataclass
 from uuid import UUID
 
-from my_app.domain.models.order import Order
-from my_app.domain.ports.repository import Repository
+from my_app.domain.models.user import User
+from my_app.domain.ports.user_repository import UserRepository
 from my_app.domain.ports.notification import NotificationService
 
 
 @dataclass(frozen=True)
-class CreateOrderInput:
-    customer_id: UUID
-    items: list[OrderItem]
+class CreateUserInput:
+    name: str
+    email: str
 
 
 @dataclass(frozen=True)
-class CreateOrderOutput:
-    order_id: UUID
-    total: int
+class CreateUserOutput:
+    id: UUID
+    name: str
+    email: str
 
 
-class CreateOrderUseCase:
+class CreateUserUseCase:
     def __init__(
         self,
-        order_repository: Repository[Order],
-        customer_repository: Repository[Customer],
+        repository: UserRepository,  # Specific port, not generic Repository[User]
         notification_service: NotificationService,
     ) -> None:
-        self._order_repository = order_repository
-        self._customer_repository = customer_repository
+        self._repository = repository
         self._notification_service = notification_service
 
-    def execute(self, input_data: CreateOrderInput) -> CreateOrderOutput:
-        customer = self._customer_repository.find_by_id(input_data.customer_id)
-        if not customer:
-            raise CustomerNotFoundError(input_data.customer_id)
+    def execute(self, input_data: CreateUserInput) -> CreateUserOutput:
+        # Use domain-specific method from the port
+        if self._repository.exists_with_email(input_data.email):
+            raise ValueError(f"User with email {input_data.email} already exists")
         
-        order = Order.create(customer_id=customer.id, items=input_data.items)
-        saved_order = self._order_repository.save(order)
+        user = User.create(name=input_data.name, email=input_data.email)
+        saved_user = self._repository.save(user)
         
         self._notification_service.send_email(
-            to=customer.email,
-            subject="Order Confirmation",
-            body=f"Your order {saved_order.id} has been placed.",
+            to=saved_user.email,
+            subject="Welcome!",
+            body=f"Welcome {saved_user.name}!",
         )
         
-        return CreateOrderOutput(order_id=saved_order.id, total=saved_order.total)
+        return CreateUserOutput(id=saved_user.id, name=saved_user.name, email=saved_user.email)
 ```
 
-### Adapters Implementing Ports
+### Adapters Satisfying Ports
 
 ```python
-# adapters/outbound/postgres_repository.py
+# adapters/outbound/postgres_user_repository.py
 from uuid import UUID
 
-from my_app.domain.models.order import Order
+from my_app.domain.models.user import User
 
 
-class PostgresOrderRepository:
-    """Adapter implementing Repository[Order] protocol."""
+class PostgresUserRepository:
+    """Adapter satisfying UserRepository protocol — no inheritance needed."""
     
     def __init__(self, connection_string: str) -> None:
         self._connection_string = connection_string
         self._connection = self._create_connection()
 
-    def save(self, entity: Order) -> Order:
+    def save(self, user: User) -> User:
         # PostgreSQL-specific implementation
         ...
 
-    def find_by_id(self, entity_id: UUID) -> Order | None:
+    def find_by_id(self, user_id: UUID) -> User | None:
         # PostgreSQL-specific implementation
         ...
 
-    def find_all(self) -> list[Order]:
-        # PostgreSQL-specific implementation
+    def find_by_email(self, email: str) -> User | None:
+        # PostgreSQL-specific implementation — domain-specific method
         ...
 
-    def delete(self, entity_id: UUID) -> bool:
-        # PostgreSQL-specific implementation
+    def exists_with_email(self, email: str) -> bool:
+        # PostgreSQL-specific implementation — domain-specific method
         ...
 ```
 
@@ -323,6 +325,8 @@ DI makes testing easy by allowing injection of fakes:
 
 ### Fakes for Testing
 
+Fakes implement the **specific port**, not a generic repository:
+
 ```python
 # tests/fakes.py
 from uuid import UUID
@@ -331,23 +335,26 @@ from my_app.domain.models.user import User
 
 
 class FakeUserRepository:
-    """Fake repository for unit testing."""
+    """Fake satisfying UserRepository protocol — implements only what the port defines."""
     
     def __init__(self) -> None:
         self._storage: dict[UUID, User] = {}
 
-    def save(self, entity: User) -> User:
-        self._storage[entity.id] = entity
-        return entity
+    def save(self, user: User) -> User:
+        self._storage[user.id] = user
+        return user
 
-    def find_by_id(self, entity_id: UUID) -> User | None:
-        return self._storage.get(entity_id)
+    def find_by_id(self, user_id: UUID) -> User | None:
+        return self._storage.get(user_id)
 
-    def find_all(self) -> list[User]:
-        return list(self._storage.values())
+    def find_by_email(self, email: str) -> User | None:
+        for user in self._storage.values():
+            if user.email == email:
+                return user
+        return None
 
-    def delete(self, entity_id: UUID) -> bool:
-        return self._storage.pop(entity_id, None) is not None
+    def exists_with_email(self, email: str) -> bool:
+        return self.find_by_email(email) is not None
 
 
 class FakeEmailer:
@@ -371,30 +378,33 @@ class FakeEmailer:
 import pytest
 
 from my_app.domain.use_cases.create_user import CreateUserUseCase, CreateUserInput
-from tests.fakes import FakeUserRepository, FakeEmailer
+from my_app.domain.ports.user_repository import UserRepository
+from my_app.domain.ports.notification import NotificationService
+from tests.fakes import FakeUserRepository, FakeNotificationService
 
 
 @pytest.fixture
-def fake_repository() -> FakeUserRepository:
+def fake_repository() -> UserRepository:
+    """Return type is the Protocol, not the fake class."""
     return FakeUserRepository()
 
 
 @pytest.fixture
-def fake_emailer() -> FakeEmailer:
-    return FakeEmailer()
+def fake_notification() -> NotificationService:
+    return FakeNotificationService()
 
 
 @pytest.mark.unit
 class TestCreateUserUseCase:
-    def test_given_valid_input_when_execute_then_user_is_persisted(
+    def test_given_valid_input_when_execute_then_user_is_created(
         self,
-        fake_repository: FakeUserRepository,
-        fake_emailer: FakeEmailer,
+        fake_repository: UserRepository,
+        fake_notification: NotificationService,
     ) -> None:
         # Given
         use_case = CreateUserUseCase(
             repository=fake_repository,
-            emailer=fake_emailer,
+            notification_service=fake_notification,
         )
         input_data = CreateUserInput(name="John", email="john@example.com")
 
@@ -402,26 +412,24 @@ class TestCreateUserUseCase:
         result = use_case.execute(input_data)
 
         # Then
-        assert fake_repository.exists(result.id)
+        assert result.name == "John"
+        assert result.email == "john@example.com"
 
-    def test_given_valid_input_when_execute_then_welcome_email_is_sent(
+    def test_given_existing_email_when_execute_then_raises_error(
         self,
-        fake_repository: FakeUserRepository,
-        fake_emailer: FakeEmailer,
+        fake_repository: UserRepository,
+        fake_notification: NotificationService,
     ) -> None:
         # Given
         use_case = CreateUserUseCase(
             repository=fake_repository,
-            emailer=fake_emailer,
+            notification_service=fake_notification,
         )
-        input_data = CreateUserInput(name="John", email="john@example.com")
+        use_case.execute(CreateUserInput(name="John", email="john@example.com"))
 
-        # When
-        use_case.execute(input_data)
-
-        # Then
-        assert len(fake_emailer.sent_emails) == 1
-        assert fake_emailer.sent_emails[0]["to"] == "john@example.com"
+        # When / Then
+        with pytest.raises(ValueError, match="already exists"):
+            use_case.execute(CreateUserInput(name="Jane", email="john@example.com"))
 ```
 
 ## No Framework DI vs DI Containers
@@ -479,6 +487,13 @@ class Container(containers.DeclarativeContainer):
 | Domain entities (from DB) | Constructor | Adapters |
 | Domain entities (tests) | Constructor | Tests |
 
+## Port Design Summary
+
+| Approach | When to Use |
+|----------|-------------|
+| **Specific ports** (e.g., `UserRepository`) | Always for domain ports — defined by use case needs |
+| **Generic protocols** (e.g., `Serializer[T]`) | Only for cross-cutting utilities, not domain ports |
+
 ## Do
 
 - Use constructor injection as the primary DI method
@@ -488,6 +503,8 @@ class Container(containers.DeclarativeContainer):
 - Use **factory methods** only for domain entities that generate their own identity
 - Keep the domain layer free of concrete adapter imports
 - Use fakes for testing instead of mocks
+- Define **specific ports** per entity (e.g., `UserRepository`), not generic `Repository[T]`
+- Add port methods based on use case needs, not generic CRUD
 
 ## Don't
 
@@ -498,3 +515,5 @@ class Container(containers.DeclarativeContainer):
 - Don't let infrastructure concerns leak into domain through DI
 - Don't make the composition root part of the domain layer
 - Don't confuse factory functions (for adapters) with factory methods (for entities)
+- Don't create generic `Repository[T, ID]` ports — be specific to each entity
+- Don't add port methods "just in case" — add them when use cases need them
