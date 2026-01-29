@@ -39,7 +39,7 @@ python_hexagonal_tdd_example/
 
 ## Hexagonal Architecture Overview
 
-```text
+<!--
 ┌─────────────────┐   ┌──────────────────────────────────┐   ┌─────────────────┐
 │                 │   │       Domain (The Hexagon)       │   │                 │
 │ Inbound Adapters│   │ ┌────────┐ ┌──────┐ ┌─────────┐  │   │Outbound Adapters│
@@ -51,6 +51,32 @@ python_hexagonal_tdd_example/
 └─────────────────┘   └──────────────────────────────────┘   └─────────────────┘
    (adapters/                      (domain/)                     (adapters/
     inbound/)            models/ | use_cases/ | ports/             outbound/)
+-->
+
+```mermaid
+flowchart LR
+    subgraph Inbound["Inbound Adapters<br/>(adapters/inbound/)"]
+        REST["REST API"]
+        CLI["CLI"]
+        MQ["Message Queue"]
+    end
+
+    subgraph Domain["Domain - The Hexagon<br/>(domain/)"]
+        UC["Use Cases<br/>(use_cases/)"]
+        Models["Models<br/>(models/)"]
+        Ports["Ports<br/>(ports/)"]
+        UC --- Models
+        Models --- Ports
+    end
+
+    subgraph Outbound["Outbound Adapters<br/>(adapters/outbound/)"]
+        Repo["Repositories"]
+        ExtAPI["External APIs"]
+        DB["Database"]
+    end
+
+    Inbound --> Domain
+    Domain --> Outbound
 ```
 
 ### Key Concepts
